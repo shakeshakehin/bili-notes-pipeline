@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" font-family="'Microsoft YaHei',sans-serif">
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+  </defs>
+  <rect width="1400" height="860" fill="#0f172a"/>
+  <text x="700" y="44" text-anchor="middle" font-size="26" font-weight="bold" fill="#f1f5f9">B站视频 → 结构化学习笔记管道 v5.1</text>
+  <text x="700" y="72" text-anchor="middle" font-size="14" fill="#64748b">语义层（LLM只做语义判断）· 展示层（双版本）· 几何层（纯代码）· 质量层（四层审计）</text>
+
+  <!-- 输入层 -->
+  <rect x="40" y="110" width="1320" height="110" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="136" font-size="13" font-weight="bold" fill="#38bdf8">① 输入层</text>
+  <g font-size="13">
+    <rect x="80" y="152" width="180" height="46" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="170" y="180" text-anchor="middle" fill="#e2e8f0">B站视频（BV号）</text>
+    <line x1="264" y1="175" x2="300" y2="175" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="304" y="152" width="200" height="46" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="404" y="180" text-anchor="middle" fill="#e2e8f0">原始字幕（ASR）</text>
+    <line x1="508" y1="175" x2="544" y2="175" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="548" y="152" width="240" height="46" rx="8" fill="#0f172a" stroke="#f59e0b"/>
+    <text x="668" y="180" text-anchor="middle" fill="#fbbf24">清洗字幕 · clean_subtitle</text>
+    <text x="668" y="196" text-anchor="middle" font-size="11" fill="#94a3b8">ASR纠错+专名规范（temperature=0）</text>
+    <line x1="792" y1="175" x2="828" y2="175" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="832" y="152" width="240" height="46" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="952" y="180" text-anchor="middle" fill="#e2e8f0">清洗字幕 = 审计参照源</text>
+  </g>
+
+  <!-- 语义层 -->
+  <rect x="40" y="250" width="1320" height="150" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="276" font-size="13" font-weight="bold" fill="#38bdf8">② 语义层 · notes_structurer（deepseek-flash + json_object）</text>
+  <g font-size="13">
+    <rect x="80" y="292" width="230" height="88" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="195" y="318" text-anchor="middle" fill="#e2e8f0" font-weight="bold">类型路由（4选1）</text>
+    <text x="195" y="340" text-anchor="middle" font-size="11" fill="#94a3b8">逻辑 / 决策 / 操作</text>
+    <text x="195" y="356" text-anchor="middle" font-size="11" fill="#94a3b8">叙事(timeline|list)</text>
+    <line x1="314" y1="336" x2="350" y2="336" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="354" y="292" width="330" height="88" rx="8" fill="#0f172a" stroke="#22c55e"/>
+    <text x="519" y="318" text-anchor="middle" fill="#4ade80" font-weight="bold">树形/清单/时间线 IR</text>
+    <text x="519" y="340" text-anchor="middle" font-size="11" fill="#94a3b8">扁平数组 + points 级 level（父子判定）</text>
+    <text x="519" y="356" text-anchor="middle" font-size="11" fill="#94a3b8">validate 严格校验 + 升温重试(0.2→0.35→0.5)</text>
+    <line x1="688" y1="336" x2="724" y2="336" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="728" y="292" width="260" height="88" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="858" y="318" text-anchor="middle" fill="#e2e8f0" font-weight="bold">IR 三件套</text>
+    <text x="858" y="340" text-anchor="middle" font-size="11" fill="#94a3b8">outline.md 精读版</text>
+    <text x="858" y="356" text-anchor="middle" font-size="11" fill="#94a3b8">outline.json 结构化IR</text>
+    <text x="858" y="372" text-anchor="middle" font-size="11" fill="#94a3b8">usage.json token计量</text>
+  </g>
+
+  <!-- 展示层 -->
+  <rect x="40" y="430" width="1320" height="150" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="456" font-size="13" font-weight="bold" fill="#38bdf8">③ 展示层 · 双版本</text>
+  <g font-size="13">
+    <rect x="80" y="472" width="300" height="90" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="230" y="498" text-anchor="middle" fill="#e2e8f0" font-weight="bold">完整版导图</text>
+    <text x="230" y="520" text-anchor="middle" font-size="11" fill="#94a3b8">树形（逻辑）/ 网格（盘点）</text>
+    <text x="230" y="536" text-anchor="middle" font-size="11" fill="#94a3b8">线性链（故事）</text>
+    <line x1="384" y1="517" x2="420" y2="517" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="424" y="472" width="300" height="90" rx="8" fill="#0f172a" stroke="#f59e0b"/>
+    <text x="574" y="498" text-anchor="middle" fill="#fbbf24" font-weight="bold">浓缩版导图（可选）</text>
+    <text x="574" y="520" text-anchor="middle" font-size="11" fill="#94a3b8">condense_tree · 压文字+砍层级</text>
+    <text x="574" y="536" text-anchor="middle" font-size="11" fill="#94a3b8">仅逻辑型，只压缩不新增</text>
+    <line x1="728" y1="517" x2="764" y2="517" stroke="#94a3b8" marker-end="url(#arr)"/>
+    <rect x="768" y="472" width="280" height="90" rx="8" fill="#0f172a" stroke="#22c55e"/>
+    <text x="908" y="498" text-anchor="middle" fill="#4ade80" font-weight="bold">几何层 · outline_to_svg</text>
+    <text x="908" y="520" text-anchor="middle" font-size="11" fill="#94a3b8">栈重建树 → 布局（网格/线性）</text>
+    <text x="908" y="536" text-anchor="middle" font-size="11" fill="#94a3b8">→ SVG → Chrome headless → PNG</text>
+  </g>
+
+  <!-- 质量层 -->
+  <rect x="40" y="610" width="1320" height="220" rx="10" fill="#1e293b" stroke="#334155"/>
+  <text x="60" y="636" font-size="13" font-weight="bold" fill="#38bdf8">④ 质量层 · 四层审计（真幻觉率实测 0.0%，6产物 560+主张）</text>
+  <g font-size="12.5">
+    <rect x="80" y="652" width="290" height="92" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="225" y="676" text-anchor="middle" fill="#e2e8f0" font-weight="bold">L1 eval_harness</text>
+    <text x="225" y="696" text-anchor="middle" font-size="11" fill="#94a3b8">schema合法率（首attempt口径）</text>
+    <text x="225" y="712" text-anchor="middle" font-size="11" fill="#94a3b8">树合理性指标 · 90% (9/10)</text>
+    <rect x="395" y="652" width="290" height="92" rx="8" fill="#0f172a" stroke="#475569"/>
+    <text x="540" y="676" text-anchor="middle" fill="#e2e8f0" font-weight="bold">L2 audit_faithfulness</text>
+    <text x="540" y="696" text-anchor="middle" font-size="11" fill="#94a3b8">lexical n-gram 粗筛</text>
+    <text x="540" y="712" text-anchor="middle" font-size="11" fill="#94a3b8">对改写保守误报</text>
+    <rect x="710" y="652" width="290" height="92" rx="8" fill="#0f172a" stroke="#22c55e"/>
+    <text x="855" y="676" text-anchor="middle" fill="#4ade80" font-weight="bold">L3 judge_faithfulness</text>
+    <text x="855" y="696" text-anchor="middle" font-size="11" fill="#94a3b8">LLM-as-judge 语义复核</text>
+    <text x="855" y="712" text-anchor="middle" font-size="11" fill="#94a3b8">参照源必须全量（截断会误报）</text>
+    <rect x="1025" y="652" width="300" height="92" rx="8" fill="#0f172a" stroke="#f59e0b"/>
+    <text x="1175" y="676" text-anchor="middle" fill="#fbbf24" font-weight="bold">L4 eval_extractor + 外部仲裁</text>
+    <text x="1175" y="696" text-anchor="middle" font-size="11" fill="#94a3b8">本地实体/锚点疑点 → payload</text>
+    <text x="1175" y="712" text-anchor="middle" font-size="11" fill="#94a3b8">外部 LLM 仲裁（用户掌控）</text>
+  </g>
+  <text x="700" y="838" text-anchor="middle" font-size="12" fill="#64748b">一键入口：python eval/notes_pipeline.py 字幕.txt -o out --condense --judge --obsidian --name 视频名</text>
+</svg>

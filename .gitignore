@@ -1,0 +1,26 @@
+# ---- 密钥 / 配置 ----
+*.env
+harness.env
+config.yaml
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+
+# ---- 运行时产物（不提交） ----
+inbox/
+harness_out/
+notes_out/
+demo_*/
+demo_out/
+demo_out2/
+tmp_*/
+proto_out/
+*.png
+!docs/architecture.png
+
+# ---- 本机 / 编辑器 ----
+.vscode/
+.idea/
+*.tmp
