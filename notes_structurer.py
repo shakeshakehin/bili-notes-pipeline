@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""notes_structurer v4: 视频字幕 → 按「视频类型」路由的结构化笔记。
+"""notes_structurer v5.4: 视频字幕 → 逻辑型结构化笔记（全类型统一收拢）。
 
-先让 LLM 判断类型（逻辑型/决策型/操作型/叙事型），再按对应 schema 输出，
+统一输出逻辑型（树形 IR，section + points level 1/2/3），
 避免"测评视频硬套因果大纲"这类错配。参考 PDTB/RST 话语关系理论。
 
 用法:
@@ -32,26 +32,17 @@ CONFIG = Path(os.path.expanduser("~")) / "AppData/Local/hermes/profiles/manager/
 DEFAULT_OUT = Path(r"E:\AIbulid\hermesonly\notes_out")
 
 SYSTEM = (
-    "你是视频内容结构分析师：先判断视频类型，再按该类型的结构重建信息骨架。"
+    "你是视频内容结构分析师：无论内容类型（课程/教程/故事/盘点），一律重建为逻辑型结构化笔记（分层树形 IR，section + points level 1/2/3）。"
     "你的输出必须是合法 JSON，不要输出任何解释文字、不要用 markdown 代码围栏包裹。"
 )
 
-USER_TMPL = """下面是某期视频的字幕（口播转录，含口语冗余、错别字、重复、广告）。请先判断视频类型，再按对应结构重建骨架。
+USER_TMPL = """下面是某期视频的字幕（口播转录，含口语冗余、错别字、重复、广告）。请重建逻辑骨架，输出**逻辑型结构化笔记**（树形 IR）。无论视频内容是课程讲解、软件操作教程还是故事/盘点，一律表达为分层树。
 
 【输入字幕】
 {text}
 
-【第 1 步：判断类型】(type 只能取一个)
-- 逻辑型：讲原理/概念/原因/为什么/影响/对比论证。特征词：原理、概念、为什么、原因、导致、本质上、机制
-- 决策型：讲值不值得买/推荐/优缺点/价格/评分/性价比/适合人群。特征词：推荐、值不值得、优缺点、价格、性价比、适合、评分、入手、评测
-- 操作型：讲怎么做/步骤/教程/工具/配置/注意。特征词：步骤、教程、怎么做、首先...然后、工具、配置、点击、新建、注意
-- 叙事型：以上都不明显，讲事件/时间线/经历/盘点。特征词：那天、后来、回顾、事件、盘点、经历
-判定原则：特征冲突时看字幕整体像哪种；仍不确定选叙事型。
-
-【第 2 步：按类型输出结构】(只输出所选类型的 JSON)
-
-■ 逻辑型：
-{{\"type\":\"逻辑型\",\"title\":\"...\",\"thesis\":\"...\",\"outline\":[{{\"level\":1,\"heading\":\"...\",\"points\":[{{\"level\":1,\"text\":\"...\"}},{{\"level\":2,\"text\":\"...\"}}]}}],\"concepts\":[{{\"name\":\"...\",\"definition\":\"...\",\"prereq\":[]}}],\"key_chain\":[\"...\",\"...\"]}}
+【输出结构】(只输出这个 JSON，type 固定为"逻辑型")
+{{"type":"逻辑型","title":"...","thesis":"...","outline":[{{"level":1,"heading":"...","points":[{{"level":1,"text":"..."}},{{"level":2,"text":"..."}}]}}],"concepts":[{{"name":"...","definition":"...","prereq":[]}}],"key_chain":["...","..."]}}
   - outline：heading 的 level 取 1/2/3；points 用 level 表达本节内的层级（树）：
       level 1 = 本节的直接要点（多个 level 1 是并列的兄弟分支）
       level 2 = 上一条要点的展开/举例/细化/执行步骤（子项）
@@ -59,31 +50,17 @@ USER_TMPL = """下面是某期视频的字幕（口播转录，含口语冗余�
     判断规则：这条如果是"新的一点"→ level 1；如果是"对前面某点的展开/支撑/举例/步骤"→ 比被展开的点低一层。
     特别注意：并列的两个概念（两个方法/两个架构/两类东西）必须是两个 level 1 兄弟，各自下面挂自己的展开，不要合并成一条。
     流程/步骤描述（怎么做、实现过程）用连续降层的子项表达：父项是动作名，子项按顺序展开。
+  - 内容类型映射（仅决定小节怎么组织，输出结构不变）：
+      课程/科普 → 按"概念→机制→对比→结论"组织小节
+      操作教程 → 按"前置条件→步骤流程→常见坑→完成标志"组织小节，步骤用 level 1/2 顺序子项表达流程逻辑
+      故事/经历/盘点 → 按"背景→过程/事件→结论/影响"组织小节
   - concepts：定义一句话 + prereq 前置概念；prereq 若为推断（原文未明说）则名称后加 [推断]
   - key_chain：主干推进 3-6 步
-
-■ 决策型：
-{{"type":"决策型","title":"...","subject":"被测对象","score":"评分，如 8.5/10","pros":["优点1","..."],"cons":["缺点1","..."],"specs":[{{"item":"参数名","value":"值"}}],"price":"价格","target":"适合人群","verdict":"最终推荐结论"}}
-
-■ 操作型：
-{{"type":"操作型","title":"...","prerequisites":["前置条件1"],"steps":[{{"step":"1. 动作","detail":"说明","tools":"所需工具/材料","pitfall":"易错点或留空"}}],"common_pitfalls":["常见坑1"],"verify":"完成标志/如何确认成功"}}
-
-■ 叙事型（两种形态二选一）：
-- 讲事件/时间线/经历 → timeline 形态：
-{{\"type\":\"叙事型\",\"title\":\"...\",\"format\":\"timeline\",\"timeline\":[{{\"when\":\"阶段名(≤6字)\",\"event\":\"核心动作一句话(≤25字)\",\"points\":[\"细节1\",\"细节2\"]}}],\"people\":[\"关键人物或空数组\"],\"impact\":\"影响/结论\"}}
-  - timeline 的 when：简短阶段名（如 开场/冲突/转折/结局，或 2024年/第一周）
-  - timeline 的 event：**只写一句话核心**（谁做了/发生了什么），细节、原话、理由放 points（2-4 条）
-  - 时点数 4-8 个，不要逐句拆，合并同类回合
-- 盘点/罗列多个东西（项目/商品/资料/清单）→ list 形态：
-{{\"type\":\"叙事型\",\"title\":\"...\",\"format\":\"list\",\"items\":[{{\"name\":\"条目名(≤12字)\",\"desc\":\"一句话简述(≤40字)\",\"points\":[\"要点1\",\"要点2\"]}}],\"people\":[],\"impact\":\"影响/结论\"}}
-  - format 选择：内容主体是事件演进/时间经历 → timeline；内容主体是"罗列多个独立条目"（开源项目、产品、资料、榜单）→ list
-  - list 的 items：每个条目 name 简短、desc 一句话、points 提炼 3-6 个关键点（**不要**把全部细节塞进 desc，细节放 points）
 
 【通用规则】
 - 删除口语废话与引流内容（加微信/学习资料/报名等），只留信息
 - 修正明显错别字，但不得添加字幕中没有的信息；信息不足处写 [原文未提及]
 - 只输出那一个 JSON，不要任何解释文字"""
-
 
 def load_cfg(path: Path) -> dict:
     if not path.exists():
@@ -145,11 +122,7 @@ def call_llm(text: str, cfg: dict, model: str, temperature: float) -> dict:
 
 TYPE_REQ = {
     "逻辑型": ["type", "title", "thesis", "outline", "concepts", "key_chain"],
-    "决策型": ["type", "title", "subject", "pros", "cons", "verdict"],
-    "操作型": ["type", "title", "prerequisites", "steps", "verify"],
-    "叙事型": ["type", "title", "format", "impact"],
 }
-
 
 RELATIONS = {"因果", "条件", "对比", "让步", "并列", "例证", "细化", "时序"}
 
@@ -243,118 +216,6 @@ def validate(d: dict) -> list[dict]:
             if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
                 _check(False, errs, f, "type", "list of string", type(v).__name__)
 
-    elif t == "决策型":
-        for f in ("subject", "score", "price", "target", "verdict"):
-            if f not in d:
-                _check(False, errs, f, "missing", "必填字段", None)
-            elif not isinstance(d[f], str):
-                _check(False, errs, f, "type", "string", type(d[f]).__name__)
-        for f in ("pros", "cons"):
-            v = d.get(f)
-            if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
-                _check(False, errs, f, "type", "list of string", type(v).__name__)
-            elif not v:
-                _check(False, errs, f, "empty", "非空数组", "[]")
-        specs = d.get("specs")
-        if not isinstance(specs, list):
-            _check(False, errs, "specs", "type", "list", type(specs).__name__)
-        else:
-            for i, s in enumerate(specs):
-                p = f"specs[{i}]"
-                if not isinstance(s, dict):
-                    _check(False, errs, p, "type", "object", type(s).__name__)
-                    continue
-                for f in ("item", "value"):
-                    if f not in s:
-                        _check(False, errs, f"{p}.{f}", "missing", "必填字段", None)
-                    elif not isinstance(s[f], str):
-                        _check(False, errs, f"{p}.{f}", "type", "string", type(s[f]).__name__)
-
-    elif t == "操作型":
-        v = d.get("prerequisites")
-        if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
-            _check(False, errs, "prerequisites", "type", "list of string", type(v).__name__)
-        steps = d.get("steps")
-        if not isinstance(steps, list):
-            _check(False, errs, "steps", "type", "list", type(steps).__name__)
-        else:
-            if not steps:
-                _check(False, errs, "steps", "empty", "非空数组", "[]")
-            for i, s in enumerate(steps):
-                p = f"steps[{i}]"
-                if not isinstance(s, dict):
-                    _check(False, errs, p, "type", "object", type(s).__name__)
-                    continue
-                for f in ("step", "detail", "tools", "pitfall"):
-                    if f not in s:
-                        _check(False, errs, f"{p}.{f}", "missing", "必填字段", None)
-                    elif not isinstance(s[f], str):
-                        _check(False, errs, f"{p}.{f}", "type", "string", type(s[f]).__name__)
-        v = d.get("common_pitfalls")
-        if v is not None and (not isinstance(v, list) or not all(isinstance(x, str) for x in v)):
-            _check(False, errs, "common_pitfalls", "type", "list of string", type(v).__name__)
-        if "verify" not in d:
-            _check(False, errs, "verify", "missing", "必填字段", None)
-        elif not isinstance(d["verify"], str):
-            _check(False, errs, "verify", "type", "string", type(d["verify"]).__name__)
-
-    elif t == "叙事型":
-        fmt = d.get("format")
-        if fmt not in ("timeline", "list"):
-            _check(False, errs, "format", "enum", "timeline/list", fmt)
-            return errs
-        if fmt == "timeline":
-            timeline = d.get("timeline")
-            if not isinstance(timeline, list):
-                _check(False, errs, "timeline", "type", "list", type(timeline).__name__)
-            else:
-                if not timeline:
-                    _check(False, errs, "timeline", "empty", "非空数组", "[]")
-                for i, tl in enumerate(timeline):
-                    p = f"timeline[{i}]"
-                    if not isinstance(tl, dict):
-                        _check(False, errs, p, "type", "object", type(tl).__name__)
-                        continue
-                    for f in ("when", "event"):
-                        if f not in tl:
-                            _check(False, errs, f"{p}.{f}", "missing", "必填字段", None)
-                        elif not isinstance(tl[f], str):
-                            _check(False, errs, f"{p}.{f}", "type", "string", type(tl[f]).__name__)
-                    pts = tl.get("points")
-                    if pts is not None and (not isinstance(pts, list)
-                                            or not all(isinstance(x, str) for x in pts)):
-                        _check(False, errs, f"{p}.points", "type", "list of string",
-                               type(pts).__name__)
-        else:  # list
-            items = d.get("items")
-            if not isinstance(items, list):
-                _check(False, errs, "items", "type", "list", type(items).__name__)
-            else:
-                if not items:
-                    _check(False, errs, "items", "empty", "非空数组", "[]")
-                for i, it in enumerate(items):
-                    p = f"items[{i}]"
-                    if not isinstance(it, dict):
-                        _check(False, errs, p, "type", "object", type(it).__name__)
-                        continue
-                    for f in ("name", "desc"):
-                        if f not in it:
-                            _check(False, errs, f"{p}.{f}", "missing", "必填字段", None)
-                        elif not isinstance(it[f], str):
-                            _check(False, errs, f"{p}.{f}", "type", "string", type(it[f]).__name__)
-                    pts = it.get("points")
-                    if pts is not None and (not isinstance(pts, list)
-                                            or not all(isinstance(x, str) for x in pts)):
-                        _check(False, errs, f"{p}.points", "type", "list of string",
-                               type(pts).__name__)
-        v = d.get("people")
-        if v is not None and (not isinstance(v, list) or not all(isinstance(x, str) for x in v)):
-            _check(False, errs, "people", "type", "list of string", type(v).__name__)
-        if "impact" not in d:
-            _check(False, errs, "impact", "missing", "必填字段", None)
-        elif not isinstance(d["impact"], str):
-            _check(False, errs, "impact", "type", "string", type(d["impact"]).__name__)
-
     return errs
 
 
@@ -373,31 +234,12 @@ def mermaid_chain(chain) -> str:
     return "\n".join(lines)
 
 
-def mermaid_steps(steps) -> str:
-    lines = ["flowchart TD"]
-    for i, s in enumerate(steps):
-        lines.append(f'  s{i}["{_esc(s.get("step", ""))}"]')
-        if i:
-            lines.append(f"  s{i-1} --> s{i}")
-    if len(steps) > 1:
-        lines.append(f"  s{len(steps)-1} -.-> D[\"完成\"]")
-    return "\n".join(lines)
-
-
-def mermaid_timeline(timeline) -> str:
-    lines = ["timeline", "  title 时间线"]
-    for x in timeline:
-        w, e = _esc(x.get("when", "")), _esc(x.get("event", ""))
-        lines.append(f"  {w} : {e}")
-    return "\n".join(lines)
-
-
 # ---------- 按类型的 markdown 渲染 ----------
 
 def _hdr(d: dict, src: str) -> list:
     return [f"# {d.get('title', '')}", "",
             f"> **类型**：{d.get('type', '')} · **来源**：{src}",
-            f"> **生成**：notes_structurer v4 · {time.strftime('%Y-%m-%d %H:%M')}", ""]
+            f"> **生成**：notes_structurer v5.4 · {time.strftime('%Y-%m-%d %H:%M')}", ""]
 
 
 def _logic_md(d, src) -> str:
@@ -425,108 +267,9 @@ def _logic_md(d, src) -> str:
     return "\n".join(out)
 
 
-def _decision_md(d, src) -> str:
-    out = _hdr(d, src)
-    meta = []
-    if d.get("subject"):
-        meta.append(f"**对象**：{d['subject']}")
-    if d.get("score"):
-        meta.append(f"**评分**：{d['score']}")
-    if d.get("price"):
-        meta.append(f"**价格**：{d['price']}")
-    out += ["", "> " + " ｜ ".join(meta), ""]
-    if d.get("pros"):
-        out += ["## 优点", ""]
-        out += [f"- {p}" for p in d["pros"]]
-        out += [""]
-    if d.get("cons"):
-        out += ["## 缺点", ""]
-        out += [f"- {c}" for c in d["cons"]]
-        out += [""]
-    if d.get("specs"):
-        out += ["## 规格参数", "", "| 项目 | 值 |", "|---|---|"]
-        for s in d["specs"]:
-            out.append(f"| {s.get('item', '')} | {s.get('value', '')} |")
-        out += [""]
-    if d.get("target"):
-        out += [f"## 适合人群", "", d["target"], ""]
-    out += ["## 最终推荐", "", str(d.get("verdict", "")), ""]
-    return "\n".join(out)
-
-
-def _operational_md(d, src) -> str:
-    out = _hdr(d, src)
-    if d.get("prerequisites"):
-        out += ["## 前置条件", ""]
-        out += [f"- {p}" for p in d["prerequisites"]]
-        out += [""]
-    out += ["## 操作步骤", ""]
-    for i, st in enumerate(d.get("steps", []), 1):
-        out.append(f"### {st.get('step', f'{i}.')}")
-        if st.get("detail"):
-            out.append("")
-            out.append(str(st["detail"]))
-        extras = []
-        if st.get("tools"):
-            extras.append(f"🛠 工具：{st['tools']}")
-        if st.get("pitfall"):
-            extras.append(f"⚠️ 易错：{st['pitfall']}")
-        if extras:
-            out.append("")
-            out.extend(extras)
-        out.append("")
-    if d.get("common_pitfalls"):
-        out += ["## 常见坑", ""]
-        out += [f"- {p}" for p in d["common_pitfalls"]]
-        out += [""]
-    if d.get("verify"):
-        out += ["## 完成标志", "", str(d["verify"]), ""]
-    out += ["```mermaid", mermaid_steps(d.get("steps", [])), "```", ""]
-    return "\n".join(out)
-
-
-def _narrative_md(d, src) -> str:
-    out = _hdr(d, src)
-    fmt = d.get("format", "timeline")
-    if fmt == "list":
-        out += ["## 条目清单", ""]
-        for i, it in enumerate(d.get("items", []), 1):
-            out.append(f"### {i}. {it.get('name', '')}")
-            if it.get("desc"):
-                out += ["", str(it["desc"]), ""]
-            for p in it.get("points", []) or []:
-                out.append(f"- {p}")
-            out.append("")
-    else:
-        out += ["## 时间线", ""]
-        for x in d.get("timeline", []):
-            out.append(f"- **{x.get('when', '')}**：{x.get('event', '')}")
-            for p in (x.get("points") or []):
-                out.append(f"  - {p}")
-        out.append("")
-    if d.get("people"):
-        out += ["## 关键人物", ""]
-        out += [f"- {p}" for p in d["people"]]
-        out += [""]
-    if d.get("impact"):
-        out += ["## 影响 / 结论", "", str(d["impact"]), ""]
-    if fmt == "list":
-        pass  # 清单形态不画 mermaid 时间线
-    elif d.get("timeline"):
-        out += ["```mermaid", mermaid_timeline(d["timeline"]), "```", ""]
-    return "\n".join(out)
-
-
 def render_md(d: dict, src: str) -> str:
-    t = d.get("type")
-    if t == "逻辑型":
+    if d.get("type") == "逻辑型":
         return _logic_md(d, src)
-    if t == "决策型":
-        return _decision_md(d, src)
-    if t == "操作型":
-        return _operational_md(d, src)
-    if t == "叙事型":
-        return _narrative_md(d, src)
     return "\n".join(_hdr(d, src) + ["", str(d)])
 
 
@@ -586,16 +329,8 @@ def main() -> None:
 
     stat = {"model": model, "base_url": cfg.get("base_url"),
             "elapsed_s": round(time.time() - t0, 1), "type": data.get("type")}
-    if data.get("type") == "逻辑型":
-        stat.update(sections=len(data["outline"]), concepts=len(data.get("concepts", [])),
-                    key_chain=len(data.get("key_chain", [])))
-    elif data.get("type") == "决策型":
-        stat.update(pros=len(data.get("pros", [])), cons=len(data.get("cons", [])),
-                    specs=len(data.get("specs", [])))
-    elif data.get("type") == "操作型":
-        stat.update(steps=len(data.get("steps", [])), pitfalls=len(data.get("common_pitfalls", [])))
-    elif data.get("type") == "叙事型":
-        stat.update(timeline=len(data.get("timeline", [])), people=len(data.get("people", [])))
+    stat.update(sections=len(data["outline"]), concepts=len(data.get("concepts", [])),
+                key_chain=len(data.get("key_chain", [])))
     stat.update({
         "prompt_tokens": usage.get("prompt_tokens"),
         "completion_tokens": usage.get("completion_tokens"),

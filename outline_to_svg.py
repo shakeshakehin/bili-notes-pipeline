@@ -86,41 +86,7 @@ def txt(x, y, s, fs, col, bold=False, anchor="start"):
 
 
 def build(data: dict) -> dict:
-    t = data.get("type")
     title = data.get("title", "未命名")
-
-    # ---- 非逻辑型：构造"伪树"复用树布局 ----
-    if t == "叙事型":
-        if data.get("format") == "list":
-            children = []
-            for i, it in enumerate(data.get("items", []) or []):
-                pts = [(None, str(it.get("desc", "")))]
-                pts += [(None, str(p)) for p in (it.get("points") or [])]
-                children.append({"title": str(it.get("name", f"条目{i+1}")),
-                                 "points": pts, "children": [], "depth": 1})
-            return {"title": title, "points": [], "children": children, "depth": 0}
-        children = []
-        for i, tl in enumerate(data.get("timeline", []) or []):
-            pts = [(None, str(tl.get("event", "")))]
-            pts += [(None, str(p)) for p in (tl.get("points") or [])]
-            children.append({"title": str(tl.get("when", f"时点{i+1}")),
-                             "points": pts, "children": [], "depth": 1})
-        return {"title": title, "points": [], "children": children, "depth": 0,
-                "linear": True}  # 故事/时间线保持线性链，不网格化
-
-    if t == "决策型":
-        children = []
-        for label, arr in (("优点", data.get("pros")), ("缺点", data.get("cons"))):
-            if arr:
-                children.append({"title": label,
-                                 "points": [(None, str(x)) for x in arr],
-                                 "children": [], "depth": 1})
-        if data.get("specs"):
-            children.append({"title": "规格",
-                             "points": [(None, f"{s.get('item','')}: {s.get('value','')}")
-                                        for s in data["specs"]],
-                             "children": [], "depth": 1})
-        return {"title": title, "points": [], "children": children, "depth": 0}
 
     root = {"title": title, "points": [], "children": [], "depth": 0}
 

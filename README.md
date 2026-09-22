@@ -1,4 +1,4 @@
-# 字幕 → 结构化学习笔记管道 · v5.3
+# 字幕 → 结构化学习笔记管道 · v5.4
 
 把 B站课程/科普视频字幕自动变成**树形笔记 + 思维导图 + 忠实度审计报告**的一整套管道。
 输入一个 BV 号或一份字幕，输出可进 Obsidian 的学习笔记。
@@ -59,15 +59,18 @@ python eval/harness_run.py <字幕文件>           # 指定单份
 python eval/notes_pipeline.py <字幕.txt> -o <out_dir> --condense --obsidian --name 视频名
 ```
 
-## 4. 四类型 × 双版本
+## 4. 全逻辑型统一（v5.4）× 双版本
 
-| 类型 | 结构 | 导图形态 |
+四类型路由废除：无论内容类型（课程/教程/故事/盘点），一律输出**逻辑型树形 IR**
+（section + points level 1/2/3）。操作步骤映射为"流程/步骤子项"，叙事事件映射为
+"背景→过程→结论"小节，只在 prompt 内决定小节组织方式，不改变输出结构。
+validate() 只认「逻辑型」，其余类型直接报 type enum 错。
+
+| 内容类型 | 小节组织（prompt 内映射，结构不变） | 导图形态 |
 |---|---|---|
-| 逻辑型（课程/科普） | section + points(level 1/2/3) 树 | 树形（完整版 / LLM 浓缩版） |
-| 叙事型 · timeline（故事/事件） | when + event + points | 线性时间线链 |
-| 叙事型 · list（盘点/清单） | items: name + desc + points | 卡片网格（多列） |
-| 决策型 | pros/cons/specs + verdict | 优缺点卡片 |
-| 操作型 | steps + pitfalls + verify | ⚠️ 导图渲染待补（当前仅 md） |
+| 课程/科普 | 概念→机制→对比→结论 | 树形（完整版 / LLM 浓缩版） |
+| 操作教程 | 前置→步骤流程→常见坑→完成标志 | 树形（步骤为 level 1/2 顺序子项） |
+| 故事/经历/盘点 | 背景→过程→结论 | 树形 |
 
 ## 5. 质量体系
 
@@ -80,7 +83,7 @@ python eval/notes_pipeline.py <字幕.txt> -o <out_dir> --condense --obsidian --
 
 **实测基线**（deepseek-v4-flash，2026-09，10 样本 4 类型）：
 - schema 合法率（首 attempt）：9/10 = 90%，最终通过率 100%
-- 类型路由：9/10 正确（叙事型边界样本 1 例误判待复验）
+- 类型路由：已废除（v5.4 全逻辑型收拢，误判问题消失）
 - 树合理性：level {1:327, 2:336}，平均树深 1.87，每节 4.4 分支
 - 仲裁实测：Kimi k2.8 抓出树内 UTF-8 编码硬错误（E7 AC 83 → 应为 E7 8C AB）；**仲裁器自身也可能算错**（曾给出 E7 8C 85），世界知识类 must_fix 需程序复核
 
@@ -108,11 +111,12 @@ eval/
   audit_faithfulness.py  lexical 可追溯率粗筛
   eval_harness.py        eval（合法率 + 树指标）
   test_validate.py       validate 回归单测
+  harness_stress_test.py 压测 driver（真实视频批量 + pipe 并发流水线 + 逐条耗时/字数 + stress_test_report.md）
 ```
 
 ## 8. 已知限制 / 路线
 
-- ⚠️ **操作型导图**未实现（唯一不能出图的类型）
+- ~~操作型不能出图~~ **已解决（v5.4）**：全类型统一逻辑树，操作型教程同样出树形导图
 - 单模型校验有自证倾向（树生成与校验同模型），强校验需独立模型
 - 单次采样噪声：`--repeat N` 未实现
 - eval 样本决策/叙事各仅 1-2 条，统计弱
@@ -125,6 +129,7 @@ eval/
 - **v5.1**：叙事型双形态（timeline/list）、非逻辑型导图、Obsidian 按日期归档
 - **v5.2**：字幕修复确定性化（LLM 清洗废弃：过度删除/数字靠猜）、LLM 评估外部化
 - **v5.3**：仲裁→修订闭环（verdict 四分类 → apply_verdict 回流）、`harness_run.py` 单模型自主部署
+- **v5.4**：全逻辑型收拢——四类型路由/四套 schema/操作型与叙事型渲染分支全部移除，validate 只认逻辑型
 
 ## 免责声明
 

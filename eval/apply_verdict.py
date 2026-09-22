@@ -23,29 +23,52 @@ import notes_structurer as ns
 
 
 def resolve(root: dict, path: str):
-    """按 'outline[2].points[3].text' 定位。返回 (父容器, 键) 或 None。"""
-    m = re.match(r"^([a-z_]+)(?:\[(\d+)\])?(?:\.([a-z_]+)(?:\[(\d+)\])?)?(?:\.([a-z_]+))?$", path)
-    if not m:
+    """按 'outline[2].points[3].text' 定位。支持任意深度（逻辑树 points 可嵌套，
+    如 outline[6].points[4].points[0].text）。返回 (父容器, 键) 或 None。"""
+    segs = path.split(".")
+    if not segs:
         return None
-    name1, idx1, name2, idx2, name3 = m.groups()
-    try:
-        node = root.get(name1)
-        if node is None:
+    node: object = root
+    for i, seg in enumerate(segs):
+        m = re.match(r"^([a-z_]+)(?:\[(\d+)\])?$", seg)
+        if not m:
             return None
-        if idx1 is not None:
-            node = node[int(idx1)]
-        if name2:
-            node = node.get(name2)
-            if node is None:
+        name, idx = m.groups()
+        if i == len(segs) - 1:
+            # 末段：无下标 → 叶子键 (父, 键)；有下标 → 容器元素 (元素, None)
+            if not isinstance(node, dict):
                 return None
-            if idx2 is not None:
-                node = node[int(idx2)]
-        if name3:
-            # 只读校验：定位到叶子键，返回 (父, 键)
-            return node, name3
-        return node, None
-    except (IndexError, KeyError, TypeError):
-        return None
+            if idx is not None:
+                nxt = node.get(name)
+                if not isinstance(nxt, (list, tuple)) or not (0 <= int(idx) < len(nxt)):
+                    return None
+                return nxt[int(idx)], None
+            return node, name
+        nxt = node.get(name) if isinstance(node, dict) else None
+        if nxt is None:
+            return None
+        if idx is not None:
+            if not isinstance(nxt, (list, tuple)) or not (0 <= int(idx) < len(nxt)):
+                return None
+            node = nxt[int(idx)]
+        else:
+            node = nxt
+    return node, None
+
+
+def selftest() -> None:
+    """resolve 回归自检：深浅路径、叶子、越界、缺失。"""
+    ir = {"outline": [{"heading": "h",
+                       "points": [{"text": "a", "points": [{"text": "deep"}]}]}],
+          "concepts": [{"name": "c", "definition": "d"}], "key_chain": ["k0"]}
+    assert resolve(ir, "outline[0].points[0].points[0].text") == (ir["outline"][0]["points"][0]["points"][0], "text")
+    assert resolve(ir, "outline[0].points[0].text") == (ir["outline"][0]["points"][0], "text")
+    assert resolve(ir, "concepts[0].definition") == (ir["concepts"][0], "definition")
+    assert resolve(ir, "outline[0]") == (ir["outline"][0], None)
+    assert resolve(ir, "outline[9]") is None
+    assert resolve(ir, "outline[0].nope") == (ir["outline"][0], "nope")  # 键不存在 → 调用方判空跳过
+    assert resolve(ir, "key_chain[0].x") is None  # 中间段落到非 dict → None
+    print("apply_verdict resolve selftest: 6 passed")
 
 
 def main() -> None:
@@ -81,7 +104,25 @@ def main() -> None:
         cur = parent.get(key)
         if cur is None:
             skipped.append((f"{path} 当前值为空", it)); continue
-        parent[key] = fixed
+        # 类型感知写入：list 字段（prereq/points/key_chain）不能被 fixed 字符串覆盖
+        if isinstance(cur, list):
+            if isinstance(fixed, list):
+                parent[key] = fixed
+            else:
+                try:
+                    parsed = json.loads(fixed)
+                    if isinstance(parsed, list):
+                        parent[key] = parsed
+                    else:
+                        skipped.append((f"{path} 目标为 list 但 fixed 非 list", it)); continue
+                except Exception:
+                    skipped.append((f"{path} 目标为 list 但 fixed 无法解析为 list", it)); continue
+        elif isinstance(cur, str):
+            if not isinstance(fixed, str):
+                skipped.append((f"{path} 目标为 str 但 fixed 非 str", it)); continue
+            parent[key] = fixed
+        else:
+            parent[key] = fixed
         applied_fix.append((path, cur, fixed))
 
     # should_add：向 outline[i].points 插入节点（或 concepts/key_chain）
@@ -98,7 +139,11 @@ def main() -> None:
         r = resolve(ir, sec_path)
         if r is None:
             skipped.append((f"section 无法解析 {path}", it)); continue
-        parent, _ = r
+        parent, leaf_key = r
+        if leaf_key is not None or not isinstance(parent, dict):
+            # path 指向叶子字段或非 dict 容器（如 steps[1].detail / 顶层 list）
+            # → 无法插入 points，跳过
+            skipped.append((f"should_add 指向非对象容器 {path}", it)); continue
         pts = parent.setdefault("points", [])
         new = {"level": min(max(int(lvl), 1), 3), "text": text}
         idx = it.get("index")
@@ -134,4 +179,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    if "--selftest" in sys.argv:
+        selftest()
+        sys.exit(0)
     main()

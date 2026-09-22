@@ -38,28 +38,9 @@ CONDENSE_TMPL = """你是教学笔记浓缩器。输入是某教学视频的结�
 
 【输出】浓缩后的合法 JSON："""
 
-CONDENSE_OP_TMPL = """你是操作教程浓缩器。输入是操作型结构化笔记（步骤流程），浓缩成**保留操作逻辑**的精简版。
-
-【浓缩规则】
-1. **输出必须保留 type 字段**（与输入 IR 的 type 完全一致，如"操作型"）
-2. 每步 step 压缩到一句话核心，**保留关键数字/比例/条件**（如"煮至原体积1/10"、"缓慢倒入并搅拌"）
-3. detail 保留"为什么这样做"的原理（如"氢氧根与镁离子生成氢氧化镁沉淀，去除苦味"），删冗长展开
-4. pitfall（易错点）**全部保留**
-5. 相邻同类步骤可合并，最多保留 8 步
-6. verify（完成标志）保留
-7. 完整句子表达，禁止碎片拼接、禁止只罗列名词
-8. 只压缩不新增：不得添加原文没有的信息
-
-【输入 IR】
-{ir}
-
-【输出】浓缩后的合法 JSON："""
-
 
 def condense(d: dict, cfg: dict, model: str, max_chars: int, max_branches: int,
              fixed_temp: float | None = None) -> tuple[dict, dict]:
-    if d.get("type") == "操作型":
-        return _condense_with(CONDENSE_OP_TMPL, d, cfg, model, fixed_temp)
     return _condense_with(CONDENSE_TMPL, d, cfg, model, fixed_temp)
 
 

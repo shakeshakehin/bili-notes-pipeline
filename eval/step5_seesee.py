@@ -17,9 +17,20 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import requests
+
+
+def strip_fences(text: str) -> str:
+    """去掉 LLM 输出可能带的 markdown 代码块围栏。"""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`").strip()
+        if cleaned.startswith("json"):
+            cleaned = cleaned[4:].strip()
+    return cleaned
 
 
 def render_md(verdict: dict, title: str) -> str:
@@ -73,7 +84,7 @@ def main() -> None:
 【A. 修复后的字幕】（已确定性修复）
 {rep_txt}
 
-【B. 结构化笔记树】（LLM 从原字幕生成的树形 IR）
+【B. 结构化笔记树】（LLM 从原字幕生成的树形 IR，统一为逻辑型：section + points level 1/2/3）
 {ir}
 
 任务：对照字幕 A 校验树 B，并输出**一份合法 JSON**（不要任何解释文字，不要 markdown 代码块）：
@@ -98,11 +109,12 @@ def main() -> None:
     prompt_file.write_text(prompt, encoding="utf-8")
     print(f"prompt: {prompt_file} ({len(prompt)} 字)")
 
+    verdict = None
+    last_err = None
     if args.direct:
         import sys as _sys
         _sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         import notes_structurer as ns
-        import json as _json
         cfg = ns.load_cfg(ns.CONFIG)
         base_url = cfg.get("base_url") or ""
         api_key = cfg.get("api_key") or ""
@@ -118,45 +130,54 @@ def main() -> None:
                     if k == "LLM_BASE_URL": base_url = v.strip()
                     elif k == "LLM_API_KEY": api_key = v.strip()
                     elif k == "LLM_MODEL": model = v.strip()
-        print(f"校验: {model} @ {base_url}（同模型直调）")
-        body = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "你是字幕总结与校验 agent，只输出合法 JSON，不要解释文字。"},
-                {"role": "user", "content": prompt},
-            ],
-            "temperature": 0.0,
-        }
-        r = requests.post(base_url.rstrip("/") + "/chat/completions",
-                          headers={"Authorization": f"Bearer {api_key}",
-                                   "Content-Type": "application/json"},
-                          json=body, timeout=1800)
-        if r.status_code != 200:
-            print(f"! HTTP {r.status_code}: {r.text[:300]}")
-            return
-        text = (r.json()["choices"][0]["message"]["content"] or "").strip()
+        print(f"校验: {model} @ {base_url}（同模型直调，升温重试 3 次）")
+        for attempt in range(3):
+            body = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": "你是字幕总结与校验 agent，只输出合法 JSON，不要解释文字。"},
+                    {"role": "user", "content": prompt},
+                ],
+                "temperature": 0.0 + 0.15 * attempt,
+            }
+            try:
+                r = requests.post(base_url.rstrip("/") + "/chat/completions",
+                                  headers={"Authorization": f"Bearer {api_key}",
+                                           "Content-Type": "application/json"},
+                                  json=body, timeout=1800)
+                if r.status_code != 200:
+                    raise RuntimeError(f"HTTP {r.status_code}: {r.text[:200]}")
+                text = (r.json()["choices"][0]["message"]["content"] or "").strip()
+                verdict = json.loads(strip_fences(text))
+                break
+            except Exception as e:
+                last_err = e
+                print(f"  仲裁尝试 {attempt + 1} 失败: {type(e).__name__}: {str(e)[:150]}", flush=True)
+                time.sleep(2)
     else:
         print(f"→ hermes -p se-esee (kimi-k2.8-preview)")
         r = subprocess.run(["hermes", "-p", "se-esee", "chat", "-q", prompt, "-Q"],
                            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=1800)
         text = (r.stdout or "").strip()
+        try:
+            verdict = json.loads(strip_fences(text))
+        except Exception as e:
+            last_err = e
+
+    if verdict is None:
+        # 3 次失败：不写 verdict.json（driver 据此判 seesee_ok=False），原始输出落盘供人工
+        vf = out / "verdict.json"
+        if vf.exists():
+            vf.unlink()
+        raw = out / "verdict_failed.raw.txt"
+        raw.write_text(text if locals().get("text") else "", encoding="utf-8")
+        print(f"! 仲裁失败（重试后仍无合法 JSON）: {type(last_err).__name__ if last_err else '?'}: "
+              f"{str(last_err)[:150] if last_err else '空输出'} → {raw.name} 供人工检查", flush=True)
+        sys.exit(1)
 
     verdict_path = out / "verdict.json"
-    try:
-        # 去掉可能的 markdown 代码块围栏
-        cleaned = text.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.strip("`").strip()
-            if cleaned.startswith("json"):
-                cleaned = cleaned[4:].strip()
-        verdict = json.loads(cleaned)
-        verdict_path.write_text(json.dumps(verdict, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"verdict.json 落盘 ({len(cleaned)} 字)")
-    except Exception as e:
-        # JSON 解析失败：把原始输出落盘供人工看
-        verdict_path.write_text(text, encoding="utf-8")
-        print(f"! JSON 解析失败 ({type(e).__name__})：原始输出已落盘 verdict.json，需人工处理")
-        return
+    verdict_path.write_text(json.dumps(verdict, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"verdict.json 落盘")
 
     md = render_md(verdict, title)
     dst = out / "step5_seesee_result.md"

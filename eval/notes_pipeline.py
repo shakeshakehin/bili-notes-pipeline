@@ -36,13 +36,13 @@ def run(cmd, timeout=400):
 def svg_to_png(svg: Path, png: Path) -> None:
     m = re.search(r'width="(\d+)" height="(\d+)"', svg.read_text(encoding="utf-8"))
     W, H = int(m.group(1)), int(m.group(2))
-    url = "file:///" + svg.as_posix()
+    url = "file:///" + svg.resolve().as_posix()
     for attempt in range(3):
         # 每次独立 user-data-dir：避免与残留 Chrome 实例/锁冲突
         tmpd = rf"C:\Users\Administrator\AppData\Local\Temp\chrome-pipe-{uuid.uuid4().hex[:8]}"
         run([CHROME, "--headless=new", "--disable-gpu", "--hide-scrollbars",
              f"--force-device-scale-factor=1.6", f"--user-data-dir={tmpd}",
-             f"--window-size={W},{H}", f"--screenshot={png}", url])
+             f"--window-size={W},{H}", f"--screenshot={png.resolve()}", url])
         if png.exists() and png.stat().st_size > 1000:
             return
     print(f"  ! 截图失败(3次): {png}")
@@ -82,7 +82,7 @@ def main() -> None:
 
     # 3. seesee 仲裁（外部 Kimi，输出 verdict.json）
     print("[3/5] seesee 仲裁 (kimi-k2.8-preview)", flush=True)
-    run([PY, WORK / "eval" / "step5_seesee.py", str(out), "--name", name])
+    run([PY, WORK / "eval" / "step5_seesee.py", str(out), "--name", name, "--direct"])
 
     # 4. 回流修订（verdict → patch IR → validate）
     draw_ir = full_ir

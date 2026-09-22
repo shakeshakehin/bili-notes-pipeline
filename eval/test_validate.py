@@ -70,16 +70,16 @@ check("section level=4", validate({"type": "逻辑型", "title": "t", "thesis": 
                                    "concepts": [], "key_chain": []}),
       1, ("outline[0].level",))
 
-# 8. 其他类型冒烟（不受树形改造影响）
-check("决策型", validate({"type": "决策型", "title": "t", "subject": "s", "score": "8",
-                          "pros": ["a"], "cons": ["b"], "specs": [{"item": "i", "value": "v"}],
-                          "price": "p", "target": "t", "verdict": "v"}), 0)
-check("操作型", validate({"type": "操作型", "title": "t", "prerequisites": ["p"],
-                          "steps": [{"step": "1", "detail": "d", "tools": "t", "pitfall": "p"}],
-                          "verify": "v"}), 0)
-check("叙事型", validate({"type": "叙事型", "title": "t",
-                          "timeline": [{"when": "w", "event": "e"}],
-                          "people": ["p"], "impact": "i"}), 0)
+# 8. 非逻辑类型必须被拒绝（v5.4 全逻辑型：类型收拢为"逻辑型"单一 schema）
+check("决策型被拒", validate({"type": "决策型", "title": "t", "subject": "s", "score": "8",
+                              "pros": ["a"], "cons": ["b"], "specs": [{"item": "i", "value": "v"}],
+                              "price": "p", "target": "t", "verdict": "v"}), 1, ("type",))
+check("操作型被拒", validate({"type": "操作型", "title": "t", "prerequisites": ["p"],
+                              "steps": [{"step": "1", "detail": "d", "tools": "t", "pitfall": "p"}],
+                              "verify": "v"}), 1, ("type",))
+check("叙事型被拒", validate({"type": "叙事型", "title": "t",
+                              "timeline": [{"when": "w", "event": "e"}],
+                              "people": ["p"], "impact": "i"}), 1, ("type",))
 
 print(f"\n{'-'*40}\n{PASS} passed, {FAIL} failed")
 sys.exit(1 if FAIL else 0)
